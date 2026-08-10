@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operations Hub</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        header {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 24px 40px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        header p {
+            margin: 6px 0 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        main {
+            padding: 40px;
+        }
+
+        .tile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+        }
+
+        .tile {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 180px;
+            padding: 24px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            text-decoration: none;
+            color: inherit;
+            transition:
+                transform 0.2s ease,
+                box-shadow 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .tile:hover {
+            transform: translateY(-4px);
+            border-color: #cbd5e1;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        }
+
+        .icon {
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: #e8f1f8;
+            color: #25658c;
+        }
+
+        .icon svg {
+            width: 30px;
+            height: 30px;
+        }
+
+        .tile h2 {
+            margin: 24px 0 6px;
+            font-size: 19px;
+            font-weight: 600;
+        }
+
+        .tile p {
+            margin: 0;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .arrow {
+            margin-top: 18px;
+            font-size: 18px;
+            color: #9ca3af;
+        }
+
+        @media (max-width: 600px) {
+            header,
+            main {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Operations Hub</h1>
+    <p>Select an area to continue</p>
+</header>
+
+<main>
+    <div class="tile-grid">
+
+        <a class="tile" href="pelagicsparser.html">
+            <div>
+                <div class="icon">
+                    <!-- Barge / vessel icon -->
+                    <svg viewBox="0 0 24 24"
+                         fill="none"
+                         stroke="currentColor"
+                         stroke-width="1.8"
+                         stroke-linecap="round"
+                         stroke-linejoin="round">
+
+                        <path d="M3 15h18l-2.5 4H5.5L3 15Z"/>
+                        <path d="M6 15V9h12v6"/>
+                        <path d="M9 9V6h6v3"/>
+                        <path d="M2 21c1 .7 2 .7 3 0s2-.7 3 0 2 .7 3 0 2-.7 3 0 2 .7 3 0 2-.7 3 0"/>
+                    </svg>
+                </div>
+
+                <h2>Barge</h2>
+                <p>Barge operations and related tools</p>
+            </div>
+
+            <div class="arrow">→</div>
+        </a>
+
+    </div>
+</main>
+
+</body>
+</html>

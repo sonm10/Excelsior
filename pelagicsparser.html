@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pelagics Invoice Extractor</title>
+  <meta name="description" content="Extract Pelagic Marine invoice line items from PDF files and download one Excel worksheet.">
+  <style>
+    :root {
+      --ink: #17303d;
+      --muted: #647884;
+      --brand: #137c8b;
+      --brand-dark: #0d6370;
+      --brand-soft: #e8f5f6;
+      --paper: #fff;
+      --canvas: #f3f6f7;
+      --line: #dbe5e8;
+      --danger: #b42318;
+      --success: #167449;
+      --shadow: 0 18px 46px rgba(23, 48, 61, .09);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 6% 0, rgba(19,124,139,.10), transparent 30rem),
+        var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { width: min(1600px, calc(100% - 32px)); margin: auto; padding: 42px 0 56px; }
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .eyebrow { margin: 0 0 8px; color: var(--brand); font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.45rem); line-height: 1; letter-spacing: -.055em; }
+    .intro { max-width: 690px; margin: 14px 0 0; color: var(--muted); line-height: 1.65; }
+    .privacy { flex: 0 0 auto; padding: 9px 13px; border: 1px solid #c6dde1; border-radius: 999px; color: var(--brand-dark); background: rgba(255,255,255,.72); font-size: .8rem; font-weight: 750; }
+    .card { overflow: hidden; border: 1px solid rgba(214,225,229,.95); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
+    .upload-panel { padding: 24px; }
+    .drop-zone {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 210px;
+      padding: 30px;
+      border: 2px dashed #a9cdd3;
+      border-radius: 16px;
+      background: linear-gradient(145deg, #fcfefe, #edf7f8);
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .drop-zone:hover, .drop-zone.dragging, .drop-zone:focus-within { border-color: var(--brand); background: var(--brand-soft); transform: translateY(-1px); }
+    .drop-zone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .upload-icon { display: grid; place-items: center; width: 50px; height: 50px; margin: 0 auto 14px; border-radius: 14px; color: white; background: var(--brand); font-size: 1.5rem; box-shadow: 0 9px 20px rgba(19,124,139,.22); }
+    .drop-zone strong { display: block; font-size: 1.1rem; }
+    .drop-zone span { display: block; margin-top: 6px; color: var(--muted); font-size: .9rem; }
+    .file-list { display: grid; gap: 9px; margin-top: 16px; }
+    .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: #fafcfd; font-size: .86rem; }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 750; }
+    .file-meta { margin-top: 3px; color: var(--muted); font-weight: 500; }
+    .file-status { color: var(--brand-dark); font-weight: 750; text-align: right; }
+    .file-status.error { color: var(--danger); }
+    .file-status.ok { color: var(--success); }
+    .results { margin-top: 24px; }
+    .toolbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .summary { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
+    .summary strong { font-size: 1.15rem; }
+    .summary span { color: var(--muted); font-size: .86rem; }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .button { min-height: 40px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: white; font-weight: 750; cursor: pointer; transition: transform .15s ease, background .15s ease, opacity .15s ease; }
+    .button:hover:not(:disabled) { transform: translateY(-1px); background: #f7fafb; }
+    .button.primary { border-color: var(--brand); color: white; background: var(--brand); }
+    .button.primary:hover:not(:disabled) { background: var(--brand-dark); }
+    .button:disabled { cursor: not-allowed; opacity: .45; }
+    .filter-bar { display: flex; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: #fbfcfd; }
+    .search { width: min(430px,100%); padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; outline: none; color: var(--ink); background: white; }
+    .search:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(19,124,139,.1); }
+    .table-wrap { max-height: 620px; overflow: auto; }
+    table { width: 100%; min-width: 1500px; border-collapse: separate; border-spacing: 0; font-size: .8rem; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid #e7edef; text-align: left; white-space: nowrap; }
+    th { position: sticky; top: 0; z-index: 1; color: #50636d; background: #f6f9fa; font-size: .7rem; letter-spacing: .035em; text-transform: uppercase; }
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+    tbody tr:hover { background: #edf7f8; }
+    .wide { max-width: 290px; overflow: hidden; text-overflow: ellipsis; }
+    .number { text-align: right; font-variant-numeric: tabular-nums; }
+    .empty { padding: 64px 24px; color: var(--muted); text-align: center; }
+    .empty strong { display: block; margin-bottom: 6px; color: var(--ink); }
+    .notice { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 10px; color: #7a5100; background: #fff7db; font-size: .86rem; }
+    .notice.visible { display: block; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 20px,1600px); padding-top: 26px; }
+      .hero { display: block; }
+      .privacy { display: inline-block; margin-top: 18px; }
+      .upload-panel { padding: 14px; }
+      .drop-zone { min-height: 190px; padding: 24px 16px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .actions { width: 100%; }
+      .actions .button { flex: 1; }
+      .filter-bar { padding: 10px 12px; }
+    }
+  </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Invoice extraction tool</p>
+        <h1>Pelagics Invoice Extractor</h1>
+        <p class="intro">Drop in Pelagic Marine invoice PDFs, review the extracted freight lines, then download one minimally formatted Excel worksheet.</p>
+      </div>
+      <div class="privacy">Files stay in this browser</div>
+    </header>
+
+    <section class="card upload-panel" aria-labelledby="upload-title">
+      <label class="drop-zone" id="dropZone" for="fileInput" tabindex="0">
+        <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple>
+        <div>
+          <div class="upload-icon" aria-hidden="true">+</div>
+          <strong id="upload-title">Choose Pelagics PDF invoices or drop them here</strong>
+          <span>Select one or many files. Multi-page invoices are supported.</span>
+        </div>
+      </label>
+      <div class="file-list" id="fileList" aria-live="polite"></div>
+      <div class="notice" id="notice" role="alert"></div>
+    </section>
+
+    <section class="card results" aria-labelledby="results-title">
+      <div class="toolbar">
+        <div class="summary">
+          <strong id="results-title">Extracted line items</strong>
+          <span id="summaryText">No PDFs processed yet</span>
+        </div>
+        <div class="actions">
+          <button class="button" id="clearButton" type="button" disabled>Clear</button>
+          <button class="button primary" id="downloadButton" type="button" disabled>Download Excel</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input class="search" id="searchInput" type="search" placeholder="Search invoices, items, shippers or delivery IDs…" aria-label="Search extracted line items" disabled>
+      </div>
+      <div class="table-wrap">
+        <table id="resultsTable" hidden>
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState">
+          <strong>Your extracted data will appear here</strong>
+          Upload Pelagics invoice PDFs above to begin.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs";
+
+    const COLUMNS = [
+      "Invoice Number", "Voyage Date", "Route", "Qty", "Item Number", "Reference Number",
+      "Description", "Shipper", "Delivery ID", "Receipt Date Time", "Price", "Extended"
+    ];
+    const MONEY_COLUMNS = new Set(["Price", "Extended"]);
+    const WIDE_COLUMNS = new Set(["Reference Number", "Description", "Shipper"]);
+    const COLUMN_BANDS = {
+      quantity: [25,60], itemNo: [60,105], itemReference: [105,245],
+      detailedDescription: [245,378], shipper: [378,495], deliveryId: [495,558],
+      deliveryPo: [558,625], receipt: [625,720], unitPrice: [720,765], lineTotal: [765,820]
+    };
+    const state = { rows: [], filesProcessed: 0, busy: false };
+
+    const fileInput = document.querySelector("#fileInput");
+    const dropZone = document.querySelector("#dropZone");
+    const fileList = document.querySelector("#fileList");
+    const notice = document.querySelector("#notice");
+    const resultsTable = document.querySelector("#resultsTable");
+    const tableHead = document.querySelector("#tableHead");
+    const tableBody = document.querySelector("#tableBody");
+    const emptyState = document.querySelector("#emptyState");
+    const summaryText = document.querySelector("#summaryText");
+    const searchInput = document.querySelector("#searchInput");
+    const clearButton = document.querySelector("#clearButton");
+    const downloadButton = document.querySelector("#downloadButton");
+
+    const normalise = value => String(value ?? "").replace(/\s+/g, " ").trim();
+    const formatBytes = bytes => bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+    const money = value => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(value || 0);
+    const parseMoney = value => {
+      const match = String(value || "").match(/-?\$?([\d,]+\.\d{2})/);
+      return match ? Number(match[1].replaceAll(",", "")) : null;
+    };
+    const matchText = (pattern, text) => text.match(pattern)?.[1]?.trim() || "";
+
+    COLUMNS.forEach(column => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = column;
+      if (MONEY_COLUMNS.has(column)) th.className = "number";
+      tableHead.appendChild(th);
+    });
+
+    function groupTextItems(items) {
+      const lines = [];
+      for (const item of items.filter(item => typeof item.str === "string" && item.str.trim())) {
+        const y = item.transform?.[5] ?? 0;
+        let line = lines.find(candidate => Math.abs(candidate.y - y) <= 2.2);
+        if (!line) {
+          line = { y, parts: [] };
+          lines.push(line);
+        }
+        line.parts.push({ x: item.transform?.[4] ?? 0, text: item.str });
+      }
+      return lines
+        .sort((a,b) => b.y - a.y)
+        .map(line => ({ ...line, parts: line.parts.sort((a,b) => a.x - b.x) }));
+    }
+
+    function bandText(parts, [start,end]) {
+      return normalise(parts.filter(part => part.x >= start && part.x < end).map(part => part.text).join(" "));
+    }
+
+    function fullLine(parts) {
+      return normalise(parts.map(part => part.text).join(" "));
+    }
+
+    function extractPageItems(lines, pageNumber, invoiceNo) {
+      const rows = [];
+      let inTable = false;
+
+      for (const line of lines) {
+        const text = fullLine(line.parts);
+        if (text.includes("DETAILED DESCRIPTION") && text.includes("DELIVERY ID")) {
+          inTable = true;
+          continue;
+        }
+        if (text.startsWith("Payment Information") || text.startsWith("SALE AMOUNT")) inTable = false;
+        if (!inTable) continue;
+
+        const quantityText = bandText(line.parts, COLUMN_BANDS.quantity);
+        const itemNo = bandText(line.parts, COLUMN_BANDS.itemNo);
+        const startsRow = /^\d+(?:\.\d+)?x?$/i.test(quantityText) && /^[A-Z0-9-]+$/i.test(itemNo);
+
+        if (startsRow) {
+          const receiptRaw = bandText(line.parts, COLUMN_BANDS.receipt);
+          const receiptMatch = receiptRaw.match(/(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+          const unitPrice = parseMoney(bandText(line.parts, COLUMN_BANDS.unitPrice));
+          const lineTotal = parseMoney(bandText(line.parts, COLUMN_BANDS.lineTotal));
+          rows.push({
+            invoiceNo,
+            pageNumber,
+            quantity: Number(quantityText.replace(/x$/i, "")),
+            included: /x$/i.test(quantityText) || (unitPrice === null && lineTotal === null),
+            itemNo,
+            itemReference: bandText(line.parts, COLUMN_BANDS.itemReference),
+            detailedDescription: bandText(line.parts, COLUMN_BANDS.detailedDescription),
+            shipper: bandText(line.parts, COLUMN_BANDS.shipper),
+            deliveryId: bandText(line.parts, COLUMN_BANDS.deliveryId),
+            deliveryPo: bandText(line.parts, COLUMN_BANDS.deliveryPo),
+            receiptDate: receiptMatch?.[1] || "",
+            receiptTime: normalise(receiptMatch?.[2]?.toUpperCase() || ""),
+            unitPrice,
+            lineTotal
+          });
+          continue;
+        }
+
+        const breakdownText = bandText(line.parts, COLUMN_BANDS.itemReference);
+        const breakdownMatch = breakdownText.match(/^(\d+(?:\.\d+)?)x\s+([A-Z0-9-]+)\s*-\s*(.+)$/i);
+        if (breakdownMatch) {
+          const receiptRaw = bandText(line.parts, COLUMN_BANDS.receipt);
+          const receiptMatch = receiptRaw.match(/(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+          rows.push({
+            invoiceNo,
+            pageNumber,
+            quantity: Number(breakdownMatch[1]),
+            included: true,
+            itemNo: breakdownMatch[2],
+            itemReference: normalise(breakdownMatch[3]),
+            detailedDescription: bandText(line.parts, COLUMN_BANDS.detailedDescription),
+            shipper: bandText(line.parts, COLUMN_BANDS.shipper),
+            deliveryId: bandText(line.parts, COLUMN_BANDS.deliveryId),
+            deliveryPo: bandText(line.parts, COLUMN_BANDS.deliveryPo),
+            receiptDate: receiptMatch?.[1] || "",
+            receiptTime: normalise(receiptMatch?.[2]?.toUpperCase() || ""),
+            unitPrice: null,
+            lineTotal: null
+          });
+          continue;
+        }
+
+        if (!rows.length || text.toUpperCase() === "ITEMS INCLUDED IN SPECIAL SERVICE") continue;
+        if (line.parts.some(part => part.x >= COLUMN_BANDS.unitPrice[0])) continue;
+        for (const [field,band] of [
+          ["itemReference",COLUMN_BANDS.itemReference],
+          ["detailedDescription",COLUMN_BANDS.detailedDescription],
+          ["shipper",COLUMN_BANDS.shipper],
+          ["deliveryPo",COLUMN_BANDS.deliveryPo]
+        ]) {
+          const continuation = bandText(line.parts, band);
+          if (continuation) rows[rows.length - 1][field] = normalise(rows[rows.length - 1][field] + " " + continuation);
+        }
+      }
+      return rows;
+    }
+
+    async function extractInvoice(file) {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      const pages = [];
+      const pageTexts = [];
+
+      for (let pageNumber=1; pageNumber<=pdf.numPages; pageNumber++) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        const lines = groupTextItems(content.items);
+        pages.push(lines);
+        pageTexts.push(lines.map(line => fullLine(line.parts)).join("\n"));
+      }
+
+      const text = pageTexts.join("\n");
+      const invoice = {
+        sourceFile: file.name,
+        invoiceNo: matchText(/Invoice No:\s*([A-Z0-9-]+)/i,text),
+        voyageDate: matchText(/Voyage Date:\s*(\d{2}\/\d{2}\/\d{4})/i,text),
+        route: matchText(/Route:\s*(.*?)\s+PO No:/i,text),
+        poNo: matchText(/PO No:\s*([A-Z0-9-]+)/i,text),
+        dueDate: matchText(/Due Date:\s*(\d{2}\/\d{2}\/\d{4})/i,text),
+        saleAmount: parseMoney(matchText(/SALE AMOUNT\s+(\$?[\d,]+\.\d{2})/i,text)),
+        gst: parseMoney(matchText(/GST\s+(\$?[\d,]+\.\d{2})/i,text)),
+        total: parseMoney(matchText(/\bTOTAL\s+(\$?[\d,]+\.\d{2})/i,text))
+      };
+
+      const extracted = pages.flatMap((lines,index) => extractPageItems(lines,index+1,invoice.invoiceNo));
+      const extractedTotal = Math.round(extracted.reduce((sum,row) => sum + (row.lineTotal || 0),0) * 100) / 100;
+      const variance = Math.round(((invoice.saleAmount || 0) - extractedTotal) * 100) / 100;
+
+      return {
+        invoice,
+        rows: extracted.map((row,index) => ({
+          "Invoice Number": invoice.invoiceNo,
+          "Voyage Date": invoice.voyageDate,
+          "Route": invoice.route,
+          "Qty": row.quantity,
+          "Item Number": row.itemNo,
+          "Reference Number": row.itemReference,
+          "Description": row.detailedDescription,
+          "Shipper": row.shipper,
+          "Delivery ID": row.deliveryId,
+          "Receipt Date Time": normalise(`${row.receiptDate} ${row.receiptTime}`),
+          "Price": row.unitPrice,
+          "Extended": row.lineTotal,
+          _lineNo: index + 1,
+          _receiptDate: row.receiptDate,
+          _receiptTime: row.receiptTime
+        })),
+        extractedTotal,
+        variance
+      };
+    }
+
+    function addFileRow(file) {
+      const element = document.createElement("div");
+      element.className = "file-row";
+      const details = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "file-name";
+      name.textContent = file.name;
+      const meta = document.createElement("div");
+      meta.className = "file-meta";
+      meta.textContent = formatBytes(file.size);
+      const status = document.createElement("div");
+      status.className = "file-status";
+      status.textContent = "Waiting";
+      details.append(name,meta);
+      element.append(details,status);
+      fileList.appendChild(element);
+      return status;
+    }
+
+    function renderTable() {
+      const term = searchInput.value.trim().toLowerCase();
+      const visibleRows = term ? state.rows.filter(row => COLUMNS.some(column => String(row[column] ?? "").toLowerCase().includes(term))) : state.rows;
+      tableBody.replaceChildren();
+      const fragment = document.createDocumentFragment();
+
+      visibleRows.forEach(row => {
+        const tr = document.createElement("tr");
+        COLUMNS.forEach(column => {
+          const td = document.createElement("td");
+          td.textContent = MONEY_COLUMNS.has(column) && row[column] !== null ? money(row[column]) : (row[column] ?? "");
+          td.title = String(row[column] ?? "");
+          if (WIDE_COLUMNS.has(column)) td.classList.add("wide");
+          if (MONEY_COLUMNS.has(column)) td.classList.add("number");
+          tr.appendChild(td);
+        });
+        fragment.appendChild(tr);
+      });
+      tableBody.appendChild(fragment);
+
+      const hasRows = state.rows.length > 0;
+      const total = state.rows.reduce((sum,row) => sum + (row["Extended"] || 0),0);
+      resultsTable.hidden = !hasRows;
+      emptyState.hidden = hasRows;
+      downloadButton.disabled = !hasRows || state.busy;
+      searchInput.disabled = !hasRows;
+      clearButton.disabled = !hasRows && state.filesProcessed === 0;
+      summaryText.textContent = state.filesProcessed
+        ? `${state.rows.length.toLocaleString()} line item${state.rows.length===1?"":"s"} from ${state.filesProcessed} PDF${state.filesProcessed===1?"":"s"} · ${money(total)} net${term ? ` · ${visibleRows.length} shown` : ""}`
+        : "No PDFs processed yet";
+    }
+
+    async function processFiles(fileCollection) {
+      if (state.busy) return;
+      const files = [...fileCollection];
+      const pdfFiles = files.filter(file => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+      notice.classList.remove("visible");
+      if (!pdfFiles.length) {
+        notice.textContent = "Please choose one or more PDF files.";
+        notice.classList.add("visible");
+        return;
+      }
+      if (pdfFiles.length !== files.length) {
+        const skipped = files.length - pdfFiles.length;
+        notice.textContent = `${skipped} non-PDF file${skipped===1?" was":"s were"} skipped.`;
+        notice.classList.add("visible");
+      }
+
+      state.busy = true;
+      fileInput.disabled = true;
+      const entries = pdfFiles.map(file => ({ file, status:addFileRow(file) }));
+      renderTable();
+
+      for (const entry of entries) {
+        entry.status.textContent = "Reading…";
+        try {
+          const result = await extractInvoice(entry.file);
+          state.rows.push(...result.rows);
+          state.rows.sort(compareRows);
+          state.filesProcessed++;
+          const matched = Math.abs(result.variance) < .01;
+          entry.status.textContent = `${result.rows.length} row${result.rows.length===1?"":"s"} · ${money(result.extractedTotal)} · ${matched ? "Matched" : "Check variance"}`;
+          entry.status.classList.add(matched ? "ok" : "error");
+        } catch (error) {
+          console.error(error);
+          entry.status.textContent = "Could not read PDF";
+          entry.status.classList.add("error");
+        }
+        renderTable();
+      }
+
+      state.busy = false;
+      fileInput.disabled = false;
+      fileInput.value = "";
+      renderTable();
+    }
+
+    function excelDate(value) {
+      if (!value) return "";
+      const [day,month,year] = value.split("/").map(Number);
+      return new Date(year,month-1,day,12);
+    }
+
+    function excelDateTime(dateValue,timeValue) {
+      if (!dateValue) return "";
+      const [day,month,year] = dateValue.split("/").map(Number);
+      let hour = 0;
+      let minute = 0;
+      const match = String(timeValue || "").match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
+      if (match) {
+        hour = Number(match[1]) % 12 + (match[3].toUpperCase() === "PM" ? 12 : 0);
+        minute = Number(match[2]);
+      }
+      return new Date(year,month-1,day,hour,minute);
+    }
+
+    function compareRows(a,b) {
+      return String(a["Invoice Number"] || "").localeCompare(
+        String(b["Invoice Number"] || ""), undefined, { numeric:true, sensitivity:"base" }
+      ) || (a._lineNo || 0) - (b._lineNo || 0);
+    }
+
+    function downloadExcel() {
+      if (!state.rows.length) return;
+      if (!window.XLSX) {
+        notice.textContent = "The Excel exporter could not load. Check your internet connection and refresh this page.";
+        notice.classList.add("visible");
+        return;
+      }
+
+      const sortedRows = [...state.rows].sort(compareRows);
+      const data = [
+        COLUMNS,
+        ...sortedRows.map(row => COLUMNS.map(column => {
+          if (column === "Voyage Date") return excelDate(row[column]);
+          if (column === "Receipt Date Time") return excelDateTime(row._receiptDate,row._receiptTime);
+          return row[column];
+        }))
+      ];
+      const worksheet = XLSX.utils.aoa_to_sheet(data, { cellDates:true });
+      worksheet["!autofilter"] = { ref: `A1:L${sortedRows.length+1}` };
+      worksheet["!cols"] = [15,13,18,8,12,30,30,22,13,20,13,13].map(wch => ({wch}));
+
+      for (let row=2; row<=sortedRows.length+1; row++) {
+        if (worksheet[`B${row}`]) worksheet[`B${row}`].z = "dd/mm/yyyy";
+        if (worksheet[`J${row}`]) worksheet[`J${row}`].z = "dd/mm/yyyy hh:mm AM/PM";
+        for (const column of ["K","L"]) if (worksheet[`${column}${row}`]) worksheet[`${column}${row}`].z = "$#,##0.00;[Red]-$#,##0.00";
+      }
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook,worksheet,"Line Items");
+      XLSX.writeFile(workbook,"Pelagics_Invoice_Extract.xlsx",{compression:true,cellDates:true});
+    }
+
+    function clearAll() {
+      state.rows = [];
+      state.filesProcessed = 0;
+      fileList.replaceChildren();
+      searchInput.value = "";
+      notice.classList.remove("visible");
+      renderTable();
+    }
+
+    fileInput.addEventListener("change",event => processFiles(event.target.files));
+    searchInput.addEventListener("input",renderTable);
+    downloadButton.addEventListener("click",downloadExcel);
+    clearButton.addEventListener("click",clearAll);
+    dropZone.addEventListener("keydown",event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+    ["dragenter","dragover"].forEach(type => dropZone.addEventListener(type,event => {
+      event.preventDefault();
+      dropZone.classList.add("dragging");
+    }));
+    ["dragleave","drop"].forEach(type => dropZone.addEventListener(type,event => {
+      event.preventDefault();
+      dropZone.classList.remove("dragging");
+    }));
+    dropZone.addEventListener("drop",event => processFiles(event.dataTransfer.files));
+  </script>
+</body>
+</html>
