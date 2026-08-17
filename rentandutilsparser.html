@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rent &amp; Utilities Invoice Parser</title>
+  <meta name="description" content="Convert rent and utilities PDF invoices into a structured Excel workbook.">
+  <style>
+    :root {
+      --ink: #19352d;
+      --muted: #667a73;
+      --green: #16745a;
+      --green-dark: #0f5945;
+      --green-soft: #ebf7f2;
+      --gold: #c88c22;
+      --paper: #fff;
+      --canvas: #f3f6f4;
+      --line: #dce6e1;
+      --danger: #b42318;
+      --shadow: 0 18px 48px rgba(25, 53, 45, .09);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 4% 0, rgba(22,116,90,.11), transparent 30rem),
+        radial-gradient(circle at 96% 8%, rgba(200,140,34,.08), transparent 26rem),
+        var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { width: min(1500px, calc(100% - 32px)); margin: auto; padding: 38px 0 58px; }
+    .back { display: inline-flex; gap: 7px; align-items: center; margin-bottom: 22px; color: var(--green-dark); text-decoration: none; font-size: .84rem; font-weight: 750; }
+    .back:hover { text-decoration: underline; }
+    .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .eyebrow { margin: 0 0 8px; color: var(--green); font-size: .74rem; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.45rem); line-height: 1; letter-spacing: -.055em; }
+    .intro { max-width: 720px; margin: 14px 0 0; color: var(--muted); line-height: 1.65; }
+    .privacy { flex: 0 0 auto; padding: 9px 13px; border: 1px solid #c9ded6; border-radius: 999px; color: var(--green-dark); background: rgba(255,255,255,.75); font-size: .8rem; font-weight: 750; }
+    .card { overflow: hidden; border: 1px solid rgba(216,228,222,.96); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
+    .upload-panel { padding: 24px; }
+    .drop-zone {
+      position: relative; display: grid; place-items: center; min-height: 210px; padding: 30px;
+      border: 2px dashed #a9cdbf; border-radius: 16px; background: linear-gradient(145deg, #fcfefd, #eef8f4);
+      text-align: center; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .drop-zone:hover, .drop-zone.dragging, .drop-zone:focus-within { border-color: var(--green); background: var(--green-soft); transform: translateY(-1px); }
+    .drop-zone input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .upload-icon { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 15px; color: white; background: linear-gradient(145deg, var(--green), #239c78); font-size: 1.55rem; box-shadow: 0 9px 20px rgba(22,116,90,.24); }
+    .drop-zone strong { display: block; font-size: 1.1rem; }
+    .drop-zone span { display: block; margin-top: 6px; color: var(--muted); font-size: .9rem; }
+    .file-list { display: grid; gap: 9px; margin-top: 16px; }
+    .file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: #fafcfb; font-size: .86rem; }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 750; }
+    .file-meta { margin-top: 3px; color: var(--muted); font-weight: 500; }
+    .file-status { color: var(--green-dark); font-weight: 750; text-align: right; }
+    .file-status.error { color: var(--danger); }
+    .notice { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 10px; color: #765108; background: #fff7db; font-size: .86rem; line-height: 1.45; }
+    .notice.visible { display: block; }
+    .results { margin-top: 24px; }
+    .toolbar { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .summary { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+    .summary strong { font-size: 1.15rem; }
+    .summary span { color: var(--muted); font-size: .86rem; }
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+    .button { min-height: 40px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: white; font-weight: 750; cursor: pointer; transition: transform .15s ease, background .15s ease, opacity .15s ease; }
+    .button:hover:not(:disabled) { transform: translateY(-1px); background: #f7faf8; }
+    .button.primary { border-color: var(--green); color: white; background: var(--green); }
+    .button.primary:hover:not(:disabled) { background: var(--green-dark); }
+    .button:disabled { cursor: not-allowed; opacity: .45; }
+    .filter-bar { display: flex; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: #fbfcfb; }
+    .search { width: min(430px,100%); padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; outline: none; color: var(--ink); background: white; }
+    .search:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,116,90,.1); }
+    .invoice-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px,1fr)); gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+    .invoice-chip { padding: 12px 13px; border: 1px solid var(--line); border-radius: 11px; background: #fbfdfc; }
+    .invoice-chip strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; }
+    .invoice-chip span { display: block; margin-top: 4px; color: var(--muted); font-size: .76rem; }
+    .table-wrap { max-height: 620px; overflow: auto; }
+    table { width: 100%; min-width: 1220px; border-collapse: separate; border-spacing: 0; font-size: .83rem; }
+    th, td { padding: 12px 13px; border-bottom: 1px solid #e7eeea; text-align: left; vertical-align: top; white-space: nowrap; }
+    th { position: sticky; top: 0; z-index: 1; color: #536a61; background: #f5f8f6; font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; }
+    tbody tr:nth-child(even) { background: #fbfcfb; }
+    tbody tr:hover { background: #eef8f4; }
+    td:nth-last-child(-n+3), th:nth-last-child(-n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+    .particulars { min-width: 220px; max-width: 430px; white-space: normal; line-height: 1.4; }
+    .empty { padding: 66px 24px; color: var(--muted); text-align: center; }
+    .empty strong { display: block; margin-bottom: 6px; color: var(--ink); }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 20px,1500px); padding-top: 24px; }
+      .hero { display: block; }
+      .privacy { display: inline-block; margin-top: 18px; }
+      .upload-panel { padding: 14px; }
+      .drop-zone { min-height: 190px; padding: 24px 16px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .actions { width: 100%; }
+      .actions .button { flex: 1; }
+      .filter-bar, .invoice-strip { padding-left: 12px; padding-right: 12px; }
+    }
+  </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <a class="back" href="index.html" aria-label="Back to Operations Hub">← Operations Hub</a>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Property accounts</p>
+        <h1>Rent &amp; Utilities Parser</h1>
+        <p class="intro">Upload rent or utilities tax invoices, review the extracted line items, then download a workbook with a combined register, individual invoice tabs and a summary.</p>
+      </div>
+      <div class="privacy">Files stay in this browser</div>
+    </header>
+
+    <section class="card upload-panel" aria-labelledby="upload-title">
+      <label class="drop-zone" id="dropZone" for="fileInput" tabindex="0">
+        <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple>
+        <div>
+          <div class="upload-icon" aria-hidden="true">+</div>
+          <strong id="upload-title">Choose rent or utilities PDF invoices</strong>
+          <span>Drop one or many PDFs here. Multi-page invoices are supported.</span>
+        </div>
+      </label>
+      <div class="file-list" id="fileList" aria-live="polite"></div>
+      <div class="notice" id="notice" role="alert"></div>
+    </section>
+
+    <section class="card results" aria-labelledby="results-title">
+      <div class="toolbar">
+        <div class="summary">
+          <strong id="results-title">Extracted invoice lines</strong>
+          <span id="summaryText">No PDFs processed yet</span>
+        </div>
+        <div class="actions">
+          <button class="button" id="clearButton" type="button" disabled>Clear</button>
+          <button class="button primary" id="downloadButton" type="button" disabled>Download Excel</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input class="search" id="searchInput" type="search" placeholder="Search invoices, charges or locations…" aria-label="Search extracted invoice lines" disabled>
+      </div>
+      <div class="invoice-strip" id="invoiceStrip" hidden></div>
+      <div class="table-wrap">
+        <table id="resultsTable" hidden>
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState">
+          <strong>Your extracted data will appear here</strong>
+          Upload invoice PDFs above to begin.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs";
+
+    const COLUMNS = ["Invoice Date", "Tax Invoice No", "Charge Type", "Location", "Period From", "Period To", "Net", "GST", "Total"];
+    const DATE_SOURCE = "(?:\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4}|\\d{1,2}\\s+[A-Za-z]{3,9}\\s+\\d{4})";
+    const DATE_AT_START_RE = new RegExp(`^(${DATE_SOURCE})\\s+`);
+    const MONEY_SOURCE = "-?\\$?\\s*[\\d,]+(?:\\.\\d{2})";
+    const AMOUNT_TRIPLE_RE = new RegExp(`(${MONEY_SOURCE})\\s+(${MONEY_SOURCE})\\s+(${MONEY_SOURCE})\\s*$`);
+    const state = { invoices: [], busy: false };
+
+    const fileInput = document.querySelector("#fileInput");
+    const dropZone = document.querySelector("#dropZone");
+    const fileList = document.querySelector("#fileList");
+    const notice = document.querySelector("#notice");
+    const resultsTable = document.querySelector("#resultsTable");
+    const tableHead = document.querySelector("#tableHead");
+    const tableBody = document.querySelector("#tableBody");
+    const emptyState = document.querySelector("#emptyState");
+    const summaryText = document.querySelector("#summaryText");
+    const searchInput = document.querySelector("#searchInput");
+    const invoiceStrip = document.querySelector("#invoiceStrip");
+    const clearButton = document.querySelector("#clearButton");
+    const downloadButton = document.querySelector("#downloadButton");
+
+    COLUMNS.forEach(column => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = column;
+      tableHead.appendChild(th);
+    });
+
+    const normalise = value => String(value ?? "").replace(/\s+/g, " ").trim();
+    const formatBytes = bytes => bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+    const money = value => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(value || 0);
+    const cleanAmount = value => Number(String(value).replace(/[$,\s]/g, ""));
+
+    function parseDate(value) {
+      if (!value) return null;
+      const numeric = value.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+      if (numeric) {
+        const year = Number(numeric[3].length === 2 ? `20${numeric[3]}` : numeric[3]);
+        return new Date(year, Number(numeric[2]) - 1, Number(numeric[1]));
+      }
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.valueOf()) ? null : parsed;
+    }
+
+    function formatDate(value) {
+      const date = value instanceof Date ? value : parseDate(value);
+      return date ? new Intl.DateTimeFormat("en-AU").format(date) : "";
+    }
+
+    function excelDate(value) {
+      const date = value instanceof Date ? value : parseDate(value);
+      return date ? (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(1899, 11, 30)) / 86400000 : null;
+    }
+
+    const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
+
+    function matchField(text, labels, valuePattern = "([^\\n]+?)") {
+      const labelPattern = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+      const match = text.match(new RegExp(`(?:${labelPattern})\\s*[:#]?\\s*${valuePattern}(?=\\s{2,}|$)`, "im"));
+      return normalise(match?.[1] || "");
+    }
+
+    function textItemsToLines(items) {
+      const lines = [];
+      for (const item of items.filter(item => typeof item.str === "string" && item.str.trim())) {
+        const y = item.transform?.[5] ?? 0;
+        let line = lines.find(candidate => Math.abs(candidate.y - y) <= 2.2);
+        if (!line) {
+          line = { y, parts: [] };
+          lines.push(line);
+        }
+        line.parts.push({ x: item.transform?.[4] ?? 0, text: item.str });
+      }
+      return lines
+        .sort((a, b) => b.y - a.y)
+        .map(line => normalise(line.parts.sort((a, b) => a.x - b.x).map(part => part.text).join(" ")))
+        .filter(Boolean);
+    }
+
+    function extractMetadata(text, filename) {
+      const invoiceMatch = text.match(new RegExp(`${DATE_SOURCE}\\s+(\\d{4,})\\s+`)) || filename.match(/_(\d{4,})_/);
+      const datePattern = `(${DATE_SOURCE})`;
+      const dueMatch = text.match(new RegExp(`Due\\s+Date\\s*[:#]?\\s*${datePattern}`, "i"));
+      const issueMatch = text.match(new RegExp(`(?:Issue|Invoice)\\s+Date\\s*[:#]?\\s*${datePattern}`, "i"));
+      const propertyBlock = text.match(/Property\s+([A-Z0-9]+)\s*\n([^\n]*Head Lease)\s*\nLease\s+([A-Z0-9]+)/i);
+      return {
+        filename,
+        invoice: normalise(invoiceMatch?.[1]) || filename.replace(/\.pdf$/i, ""),
+        dueDate: parseDate(dueMatch?.[1]),
+        issueDate: parseDate(issueMatch?.[1]),
+        property: normalise(propertyBlock?.[1]) || matchField(text, ["Property"], "(.+?)") || "",
+        lease: normalise(propertyBlock?.[2]) || "",
+        lessee: normalise(propertyBlock?.[3]) || ""
+      };
+    }
+
+    function isNoise(line) {
+      return /^(?:invoice date|tax invoice|particulars|description|net(?: amount)?|gst|total|subtotal|amount due|page \d+|property|lease|lessee|tenant|due date|issue date)/i.test(line);
+    }
+
+    function extractRows(lines, metadata) {
+      const rows = [];
+      const seen = new Set();
+      for (const originalLine of lines) {
+        const amounts = originalLine.match(AMOUNT_TRIPLE_RE);
+        if (!amounts || isNoise(originalLine)) continue;
+        let leading = normalise(originalLine.slice(0, amounts.index));
+        let date = metadata.issueDate;
+        const dateMatch = leading.match(DATE_AT_START_RE);
+        if (dateMatch) {
+          date = parseDate(dateMatch[1]) || date;
+          leading = normalise(leading.slice(dateMatch[0].length));
+        }
+        let invoice = metadata.invoice;
+        const invoiceAtStart = leading.match(/^([A-Z0-9-]{4,})\s+(.+)$/i);
+        if (invoiceAtStart && (invoiceAtStart[1] === metadata.invoice || /^\d+$/.test(invoiceAtStart[1]))) {
+          invoice = invoiceAtStart[1];
+          leading = invoiceAtStart[2];
+        }
+        if (!leading || /^(?:total|subtotal|balance|amount due)$/i.test(leading)) continue;
+        const periodMatch = leading.match(new RegExp(`\\s+(${DATE_SOURCE})\\s+-\\s+(${DATE_SOURCE})$`));
+        const periodFrom = parseDate(periodMatch?.[1]);
+        const periodTo = parseDate(periodMatch?.[2]);
+        if (periodMatch) leading = normalise(leading.slice(0, periodMatch.index));
+        const separator = leading.lastIndexOf(" - ");
+        const chargeType = normalise(separator >= 0 ? leading.slice(0, separator) : leading);
+        const location = normalise(separator >= 0 ? leading.slice(separator + 3) : "");
+        if (!chargeType) continue;
+        const net = cleanAmount(amounts[1]);
+        const gst = cleanAmount(amounts[2]);
+        const total = cleanAmount(amounts[3]);
+        if (![net, gst, total].every(Number.isFinite)) continue;
+        const key = `${formatDate(date)}|${invoice}|${chargeType}|${location}|${formatDate(periodFrom)}|${formatDate(periodTo)}|${net}|${gst}|${total}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push({ date, invoice, chargeType, location, periodFrom, periodTo, net, gst, total });
+      }
+
+      if (!rows.length) {
+        const text = lines.join(" ");
+        const total = text.match(/(?:Total\s+Invoice\s+Amount|Invoice\s+Total|Amount\s+Due)\s*[:$]?\s*([\d,]+\.\d{2})/i);
+        const gst = text.match(/(?:GST\s+(?:Amount|Total)|Total\s+GST)\s*[:$]?\s*([\d,]+\.\d{2})/i);
+        if (total) {
+          const totalValue = cleanAmount(total[1]);
+          const gstValue = gst ? cleanAmount(gst[1]) : 0;
+          rows.push({ date: metadata.issueDate, invoice: metadata.invoice, chargeType: "Invoice total", location: "", periodFrom: null, periodTo: null, net: totalValue - gstValue, gst: gstValue, total: totalValue });
+        }
+      }
+      return rows;
+    }
+
+    async function extractInvoice(file) {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      const lines = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        lines.push(...textItemsToLines(content.items));
+      }
+      const text = lines.join("\n");
+      const metadata = extractMetadata(text, file.name);
+      const rows = extractRows(lines, metadata);
+      return { ...metadata, rows };
+    }
+
+    function addFileRow(file) {
+      const element = document.createElement("div");
+      element.className = "file-row";
+      const details = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "file-name";
+      name.textContent = file.name;
+      const meta = document.createElement("div");
+      meta.className = "file-meta";
+      meta.textContent = formatBytes(file.size);
+      const status = document.createElement("div");
+      status.className = "file-status";
+      status.textContent = "Waiting";
+      details.append(name, meta);
+      element.append(details, status);
+      fileList.appendChild(element);
+      return status;
+    }
+
+    function allRows() {
+      return state.invoices.flatMap(invoice => invoice.rows);
+    }
+
+    function renderTable() {
+      const rows = allRows();
+      const term = searchInput.value.trim().toLowerCase();
+      const visible = term ? rows.filter(row => Object.values(row).some(value => String(value instanceof Date ? formatDate(value) : value).toLowerCase().includes(term))) : rows;
+      tableBody.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      visible.forEach(row => {
+        const tr = document.createElement("tr");
+        const values = [formatDate(row.date), row.invoice, row.chargeType, row.location, formatDate(row.periodFrom), formatDate(row.periodTo), money(row.net), money(row.gst), money(row.total)];
+        values.forEach((value, index) => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          td.title = value;
+          if (index === 2 || index === 3) td.className = "particulars";
+          tr.appendChild(td);
+        });
+        fragment.appendChild(tr);
+      });
+      tableBody.appendChild(fragment);
+
+      invoiceStrip.replaceChildren();
+      state.invoices.forEach(invoice => {
+        const chip = document.createElement("div");
+        chip.className = "invoice-chip";
+        const title = document.createElement("strong");
+        title.textContent = `Invoice ${invoice.invoice}`;
+        const detail = document.createElement("span");
+        const property = [invoice.property, invoice.lease].filter(Boolean).join(" · ");
+        detail.textContent = `${invoice.rows.length} line${invoice.rows.length === 1 ? "" : "s"} · ${property || invoice.filename}`;
+        chip.append(title, detail);
+        invoiceStrip.appendChild(chip);
+      });
+
+      const total = rows.reduce((sum, row) => sum + row.total, 0);
+      const hasRows = rows.length > 0;
+      const hasInvoices = state.invoices.length > 0;
+      resultsTable.hidden = !hasRows;
+      emptyState.hidden = hasRows;
+      invoiceStrip.hidden = !hasInvoices;
+      downloadButton.disabled = !hasRows || state.busy;
+      searchInput.disabled = !hasRows;
+      clearButton.disabled = !hasInvoices && !state.busy;
+      summaryText.textContent = hasInvoices
+        ? `${rows.length.toLocaleString()} line${rows.length === 1 ? "" : "s"} from ${state.invoices.length} invoice${state.invoices.length === 1 ? "" : "s"} · ${money(total)} total${term ? ` · ${visible.length} shown` : ""}`
+        : "No PDFs processed yet";
+    }
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.classList.toggle("visible", Boolean(message));
+    }
+
+    async function processFiles(fileCollection) {
+      if (state.busy) return;
+      const files = [...fileCollection];
+      const pdfFiles = files.filter(file => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+      showNotice("");
+      if (!pdfFiles.length) {
+        showNotice("Please choose one or more PDF files.");
+        return;
+      }
+      if (pdfFiles.length !== files.length) showNotice(`${files.length - pdfFiles.length} non-PDF file${files.length - pdfFiles.length === 1 ? " was" : "s were"} skipped.`);
+
+      state.busy = true;
+      fileInput.disabled = true;
+      const entries = pdfFiles.map(file => ({ file, status: addFileRow(file) }));
+      renderTable();
+      let unreadable = 0;
+
+      for (const entry of entries) {
+        entry.status.textContent = "Reading…";
+        try {
+          const invoice = await extractInvoice(entry.file);
+          state.invoices.push(invoice);
+          const total = invoice.rows.reduce((sum, row) => sum + row.total, 0);
+          entry.status.textContent = invoice.rows.length ? `${invoice.rows.length} line${invoice.rows.length === 1 ? "" : "s"} · ${money(total)}` : "No line items found";
+          if (!invoice.rows.length) {
+            entry.status.classList.add("error");
+            unreadable += 1;
+          }
+        } catch (error) {
+          console.error(error);
+          entry.status.textContent = "Could not read PDF";
+          entry.status.classList.add("error");
+          unreadable += 1;
+        }
+        renderTable();
+      }
+
+      if (unreadable) showNotice(`${unreadable} PDF${unreadable === 1 ? "" : "s"} could not be fully parsed. Scanned/image-only invoices need OCR before upload; check the preview before exporting.`);
+      state.busy = false;
+      fileInput.disabled = false;
+      fileInput.value = "";
+      renderTable();
+    }
+
+    function styleHeader(worksheet, row, startColumn, endColumn) {
+      for (let column = startColumn; column <= endColumn; column += 1) {
+        const address = XLSX.utils.encode_cell({ r: row, c: column });
+        if (!worksheet[address]) continue;
+        worksheet[address].s = { fill: { fgColor: { rgb: "1F4E78" } }, font: { bold: true, color: { rgb: "FFFFFF" } }, alignment: { horizontal: "center", vertical: "center" } };
+      }
+    }
+
+    function setFormats(worksheet, startRow, endRow, dateColumns, moneyColumns) {
+      for (let row = startRow; row <= endRow; row += 1) {
+        dateColumns.forEach(column => {
+          const dateCell = worksheet[`${column}${row}`];
+          if (dateCell) dateCell.z = "dd/mm/yyyy";
+        });
+        moneyColumns.forEach(column => {
+          const cell = worksheet[`${column}${row}`];
+          if (cell) cell.z = '$#,##0.00;[Red]-$#,##0.00';
+        });
+      }
+    }
+
+    function uniqueSheetName(invoice, used) {
+      const base = `Invoice ${invoice}`.replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "Invoice";
+      let name = base;
+      let suffix = 2;
+      while (used.has(name)) {
+        const tail = ` ${suffix++}`;
+        name = `${base.slice(0, 31 - tail.length)}${tail}`;
+      }
+      used.add(name);
+      return name;
+    }
+
+    function downloadExcel() {
+      const rows = allRows();
+      if (!rows.length) return;
+      if (!window.XLSX) {
+        showNotice("The Excel exporter could not load. Check your internet connection and refresh this page.");
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      workbook.Props = { Title: "Rent and Utilities Invoice Conversion", Subject: "Combined invoice register", Author: "Operations Hub" };
+      const combinedData = [COLUMNS, ...rows.map(row => [excelDate(row.date), row.invoice, row.chargeType, row.location, excelDate(row.periodFrom), excelDate(row.periodTo), row.net, row.gst, row.total])];
+      const totalRow = combinedData.length + 1;
+      combinedData.push([null, null, null, null, null, "Grand Total", { f: `SUM(G2:G${totalRow - 1})` }, { f: `SUM(H2:H${totalRow - 1})` }, { f: `SUM(I2:I${totalRow - 1})` }]);
+      const combined = XLSX.utils.aoa_to_sheet(combinedData, { cellDates: true });
+      combined["!cols"] = [13, 18, 32, 25, 13, 13, 15, 15, 15].map(wch => ({ wch }));
+      combined["!autofilter"] = { ref: `A1:I${totalRow - 1}` };
+      combined["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft", state: "frozen" };
+      styleHeader(combined, 0, 0, 8);
+      setFormats(combined, 2, totalRow, ["A", "E", "F"], ["G", "H", "I"]);
+      XLSX.utils.book_append_sheet(workbook, combined, "Combined");
+
+      const usedNames = new Set(["Combined", "Summary"]);
+      state.invoices.forEach(invoice => {
+        const data = [
+          [`Tax Invoice ${invoice.invoice}`],
+          [],
+          ["Due Date", excelDate(invoice.dueDate)],
+          ["Issue Date", excelDate(invoice.issueDate)],
+          ["Property", invoice.property],
+          ["Lease", invoice.lease],
+          ["Lessee", invoice.lessee],
+          [],
+          COLUMNS,
+          ...invoice.rows.map(row => [excelDate(row.date), row.invoice, row.chargeType, row.location, excelDate(row.periodFrom), excelDate(row.periodTo), row.net, row.gst, row.total])
+        ];
+        const totalLine = data.length + 1;
+        data.push([null, null, null, null, null, "Invoice Total", { f: `SUM(G10:G${totalLine - 1})` }, { f: `SUM(H10:H${totalLine - 1})` }, { f: `SUM(I10:I${totalLine - 1})` }]);
+        const worksheet = XLSX.utils.aoa_to_sheet(data, { cellDates: true });
+        worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
+        worksheet["!cols"] = [13, 18, 32, 25, 13, 13, 15, 15, 15].map(wch => ({ wch }));
+        worksheet["!autofilter"] = { ref: `A9:I${totalLine - 1}` };
+        worksheet["!freeze"] = { xSplit: 0, ySplit: 9, topLeftCell: "A10", activePane: "bottomLeft", state: "frozen" };
+        styleHeader(worksheet, 8, 0, 8);
+        setFormats(worksheet, 10, totalLine, ["A", "E", "F"], ["G", "H", "I"]);
+        if (worksheet.B3) worksheet.B3.z = "dd/mm/yyyy";
+        if (worksheet.B4) worksheet.B4.z = "dd/mm/yyyy";
+        XLSX.utils.book_append_sheet(workbook, worksheet, uniqueSheetName(invoice.invoice, usedNames));
+      });
+
+      const summaryData = [
+        ["Invoice Conversion Summary"],
+        [],
+        ["Tax Invoice No.", "Due Date", "Issue Date", "Net ($)", "GST ($)", "Total ($)"],
+        ...state.invoices.map(invoice => [
+          invoice.invoice,
+          excelDate(invoice.dueDate),
+          excelDate(invoice.issueDate),
+          roundMoney(invoice.rows.reduce((sum, row) => sum + row.net, 0)),
+          roundMoney(invoice.rows.reduce((sum, row) => sum + row.gst, 0)),
+          roundMoney(invoice.rows.reduce((sum, row) => sum + row.total, 0))
+        ])
+      ];
+      const summaryTotalRow = summaryData.length + 2;
+      summaryData.push([], ["Combined Total", null, null, { f: `SUM(D4:D${summaryTotalRow - 2})` }, { f: `SUM(E4:E${summaryTotalRow - 2})` }, { f: `SUM(F4:F${summaryTotalRow - 2})` }]);
+      const summary = XLSX.utils.aoa_to_sheet(summaryData, { cellDates: true });
+      summary["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+      summary["!cols"] = [20, 15, 15, 16, 16, 16].map(wch => ({ wch }));
+      styleHeader(summary, 2, 0, 5);
+      setFormats(summary, 4, summaryTotalRow, ["B", "C"], ["D", "E", "F"]);
+      XLSX.utils.book_append_sheet(workbook, summary, "Summary");
+
+      XLSX.writeFile(workbook, "Rent_and_Utilities_Invoices.xlsx", { compression: true, cellDates: true });
+    }
+
+    function clearAll() {
+      state.invoices = [];
+      fileList.replaceChildren();
+      searchInput.value = "";
+      showNotice("");
+      renderTable();
+    }
+
+    fileInput.addEventListener("change", event => processFiles(event.target.files));
+    searchInput.addEventListener("input", renderTable);
+    downloadButton.addEventListener("click", downloadExcel);
+    clearButton.addEventListener("click", clearAll);
+    dropZone.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+    ["dragenter", "dragover"].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.add("dragging");
+    }));
+    ["dragleave", "drop"].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.remove("dragging");
+    }));
+    dropZone.addEventListener("drop", event => processFiles(event.dataTransfer.files));
+  </script>
+</body>
+</html>
