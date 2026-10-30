@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viva Energy Invoice Parser</title>
+  <meta name="description" content="Extract Viva Energy invoice line items from multiple PDF files and download them as Excel.">
+  <style>
+    :root {
+      --ink: #142b2a;
+      --muted: #647472;
+      --brand: #087f73;
+      --brand-dark: #05645b;
+      --brand-soft: #e7f5f2;
+      --paper: #ffffff;
+      --canvas: #f3f6f4;
+      --line: #dce5e2;
+      --danger: #b42318;
+      --warning: #9a6700;
+      --shadow: 0 18px 45px rgba(20, 43, 42, 0.09);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 2%, rgba(8, 127, 115, 0.09), transparent 28rem),
+        var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .shell {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 44px 0 56px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-end;
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.45rem);
+      line-height: 1;
+      letter-spacing: -0.055em;
+    }
+
+    .intro {
+      max-width: 620px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .privacy {
+      flex: 0 0 auto;
+      padding: 9px 13px;
+      border: 1px solid #c8ddd8;
+      border-radius: 999px;
+      color: var(--brand-dark);
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .card {
+      border: 1px solid rgba(211, 224, 220, 0.9);
+      border-radius: 22px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .upload-panel { padding: 24px; }
+
+    .drop-zone {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 220px;
+      padding: 30px;
+      border: 2px dashed #acd0c8;
+      border-radius: 16px;
+      background: linear-gradient(145deg, #fbfefd, #f1faf8);
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+
+    .drop-zone:hover, .drop-zone.dragging, .drop-zone:focus-within {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+      transform: translateY(-1px);
+    }
+
+    .drop-zone input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .upload-icon {
+      display: grid;
+      place-items: center;
+      width: 50px;
+      height: 50px;
+      margin: 0 auto 14px;
+      border-radius: 14px;
+      color: white;
+      background: var(--brand);
+      font-size: 1.5rem;
+      font-weight: 300;
+      box-shadow: 0 9px 20px rgba(8, 127, 115, 0.22);
+    }
+
+    .drop-zone strong { display: block; font-size: 1.1rem; }
+    .drop-zone span { display: block; margin-top: 6px; color: var(--muted); font-size: 0.9rem; }
+
+    .file-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 16px;
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #fafcfb;
+      font-size: 0.86rem;
+    }
+
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .file-meta { margin-top: 3px; color: var(--muted); font-weight: 500; }
+    .file-status { color: var(--brand-dark); font-weight: 750; }
+    .file-status.error { color: var(--danger); }
+
+    .results { margin-top: 24px; }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .summary { display: flex; gap: 20px; align-items: baseline; flex-wrap: wrap; }
+    .summary strong { font-size: 1.15rem; }
+    .summary span { color: var(--muted); font-size: 0.86rem; }
+
+    .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+
+    .button {
+      min-height: 40px;
+      padding: 0 15px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink);
+      background: white;
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform 150ms ease, background 150ms ease, opacity 150ms ease;
+    }
+
+    .button:hover:not(:disabled) { transform: translateY(-1px); background: #f7faf9; }
+    .button.primary { border-color: var(--brand); color: white; background: var(--brand); }
+    .button.primary:hover:not(:disabled) { background: var(--brand-dark); }
+    .button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfc;
+    }
+
+    .search {
+      width: min(420px, 100%);
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      outline: none;
+      color: var(--ink);
+      background: white;
+    }
+
+    .search:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(8, 127, 115, 0.1); }
+
+    .table-wrap { max-height: 610px; overflow: auto; }
+    table { width: 100%; min-width: 1320px; border-collapse: separate; border-spacing: 0; font-size: 0.82rem; }
+    th, td { padding: 12px 13px; border-bottom: 1px solid #e7edeb; text-align: left; white-space: nowrap; }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: #50615f;
+      background: #f7f9f8;
+      font-size: 0.71rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    tbody tr:nth-child(even) { background: #fbfcfc; }
+    tbody tr:hover { background: #f0f8f6; }
+    td:nth-last-child(-n+2), th:nth-last-child(-n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+    .notes { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+
+    .empty {
+      padding: 64px 24px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty strong { display: block; margin-bottom: 6px; color: var(--ink); }
+
+    .notice {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #7a5100;
+      background: #fff7db;
+      font-size: 0.86rem;
+    }
+    .notice.visible { display: block; }
+
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 20px, 1480px); padding-top: 26px; }
+      .hero { display: block; }
+      .privacy { display: inline-block; margin-top: 18px; }
+      .upload-panel { padding: 14px; }
+      .drop-zone { min-height: 190px; padding: 24px 16px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .actions { width: 100%; }
+      .actions .button { flex: 1; }
+      .filter-bar { padding: 10px 12px; }
+    }
+  </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Invoice extraction tool</p>
+        <h1>Viva Energy Invoice Parser</h1>
+        <p class="intro">Drop in one or more Viva Energy invoice PDFs. The line items are combined into one reviewable table, ready to download as an Excel workbook.</p>
+      </div>
+      <div class="privacy">Files stay in this browser</div>
+    </header>
+
+    <section class="card upload-panel" aria-labelledby="upload-title">
+      <label class="drop-zone" id="dropZone" for="fileInput" tabindex="0">
+        <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple>
+        <div>
+          <div class="upload-icon" aria-hidden="true">+</div>
+          <strong id="upload-title">Choose PDF invoices or drop them here</strong>
+          <span>Select as many files as needed. They will be processed together.</span>
+        </div>
+      </label>
+      <div class="file-list" id="fileList" aria-live="polite"></div>
+      <div class="notice" id="notice" role="alert"></div>
+    </section>
+
+    <section class="card results" aria-labelledby="results-title">
+      <div class="toolbar">
+        <div class="summary">
+          <strong id="results-title">Extracted line items</strong>
+          <span id="summaryText">No PDFs processed yet</span>
+        </div>
+        <div class="actions">
+          <button class="button" id="clearButton" type="button" disabled>Clear</button>
+          <button class="button primary" id="downloadButton" type="button" disabled>Download Excel</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input class="search" id="searchInput" type="search" placeholder="Search the extracted table…" aria-label="Search extracted line items" disabled>
+      </div>
+      <div class="table-wrap">
+        <table id="resultsTable" hidden>
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState">
+          <strong>Your extracted data will appear here</strong>
+          Upload invoice PDFs above to begin.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.mjs";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/build/pdf.worker.mjs";
+
+    const COLUMNS = ["Source File", "Invoice No.", "Invoice Date", "Due Date", "Account Number", "PO Number", "Delivery Site", "Supplying Plant", "Dispatch Date", "Delivery Document", "Order Number", "Product Code", "Product Description", "Quantity", "Unit", "Pricing Date", "Unit Price (AUD)", "Ex GST (AUD)", "GST (AUD)", "Inc GST (AUD)"];
+    const numericColumns = ["Quantity", "Unit Price (AUD)", "Ex GST (AUD)", "GST (AUD)", "Inc GST (AUD)"];
+    const amount = value => Number(value.replace(/[$,\s]/g, ""));
+    const datePattern = "\\d{2}\\.\\d{2}\\.\\d{4}";
+    const rowPattern = new RegExp(`^(?:(${datePattern})\\s+)?(\\d+)\\s+(?:(\\d+)\\s+)?(\\d{9})\\s+(.+?)\\s+([\\d,]+(?:\\.\\d+)?)\\s+([A-Z]+)\\s+(${datePattern})\\s+\\$([\\d,.]+)\\s+([A-Z]+)\\s+\\$([\\d,.]+)\\s+\\$([\\d,.]+)\\s+\\$([\\d,.]+)$`);
+
+    const state = { rows: [], filesProcessed: 0, busy: false };
+    const fileInput = document.querySelector("#fileInput");
+    const dropZone = document.querySelector("#dropZone");
+    const fileList = document.querySelector("#fileList");
+    const notice = document.querySelector("#notice");
+    const resultsTable = document.querySelector("#resultsTable");
+    const tableHead = document.querySelector("#tableHead");
+    const tableBody = document.querySelector("#tableBody");
+    const emptyState = document.querySelector("#emptyState");
+    const summaryText = document.querySelector("#summaryText");
+    const searchInput = document.querySelector("#searchInput");
+    const clearButton = document.querySelector("#clearButton");
+    const downloadButton = document.querySelector("#downloadButton");
+
+    COLUMNS.forEach(column => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = column;
+      tableHead.appendChild(th);
+    });
+
+    const normalise = value => String(value ?? "").replace(/\s+/g, " ").trim();
+    const formatBytes = bytes => `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+    function textItemsToLines(items) {
+      const textItems = items.filter(item => typeof item.str === "string" && item.str.trim());
+      const lines = [];
+      for (const item of textItems) {
+        const y = item.transform?.[5] ?? 0;
+        let line = lines.find(candidate => Math.abs(candidate.y - y) <= 2.2);
+        if (!line) {
+          line = { y, parts: [] };
+          lines.push(line);
+        }
+        line.parts.push({ x: item.transform?.[4] ?? 0, text: item.str });
+      }
+      return lines
+        .sort((a, b) => b.y - a.y)
+        .map(line => normalise(line.parts.sort((a, b) => a.x - b.x).map(part => part.text).join(" ")))
+        .filter(Boolean);
+    }
+
+    function parseInvoice(pages, filename) {
+      const text = pages.flat().join("\n");
+      const pick = pattern => text.match(pattern)?.[1] || "";
+      const metadata = {
+        "Source File": filename,
+        "Invoice No.": pick(/(?:Tax )?Invoice Number\s+(\d+)/i),
+        "Invoice Date": pick(/Invoice Date\s+(\d{2}\.\d{2}\.\d{4})/i),
+        "Due Date": pick(/Due Date\s+(\d{2}\.\d{2}\.\d{4})/i),
+        "Account Number": pick(/Account Number\s+(\d+)/i),
+        "PO Number": pick(/PO Number:?\s+(\d+)/i),
+        "Delivery Site": pick(/For Deliveries to:\s*\n([^\n]+)/i)
+      };
+      if (!metadata["Invoice No."]) throw new Error("Viva invoice number not found.");
+      const rows = [];
+      let dispatch = "", order = "", plant = "";
+      for (const line of pages.flat()) {
+        if (line.startsWith("Supplied from:")) plant = line.slice(14).trim();
+        const match = line.match(rowPattern);
+        if (!match) continue;
+        const [, date, delivery, orderNo, code, description, quantity, unit, pricing, price, priceUnit, ex, gst, inc] = match;
+        dispatch = date || dispatch;
+        order = orderNo || order;
+        if (unit !== priceUnit) throw new Error("Quantity and price units differ; review source PDF.");
+        rows.push({...metadata, "Supplying Plant": plant, "Dispatch Date": dispatch,
+          "Delivery Document": delivery, "Order Number": order, "Product Code": code,
+          "Product Description": description, "Quantity": amount(quantity), "Unit": unit,
+          "Pricing Date": pricing, "Unit Price (AUD)": amount(price),
+          "Ex GST (AUD)": amount(ex), "GST (AUD)": amount(gst), "Inc GST (AUD)": amount(inc)});
+      }
+      if (!rows.length) throw new Error("No delivery lines found. Scanned PDFs require OCR.");
+      const totals = text.match(/Totals this Invoice\s+\$([\d,.]+)\s+\$([\d,.]+)\s+\$([\d,.]+)/i);
+      if (!totals) throw new Error("Invoice totals not found; extraction could not be verified.");
+      ["Ex GST (AUD)", "GST (AUD)", "Inc GST (AUD)"].forEach((key, i) => {
+        const sum = rows.reduce((total, row) => total + Math.round(row[key] * 100), 0);
+        if (Math.abs(sum - Math.round(amount(totals[i+1]) * 100)) > 1)
+          throw new Error(`${key} does not reconcile with invoice total; review PDF.`);
+      });
+      return rows;
+    }
+
+    async function extractRows(file) {
+      const loadingTask = pdfjsLib.getDocument({data: new Uint8Array(await file.arrayBuffer())});
+      const pdf = await loadingTask.promise;
+      try {
+        const pages = [];
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const page = await pdf.getPage(n);
+          pages.push(textItemsToLines((await page.getTextContent()).items));
+        }
+        return parseInvoice(pages, file.name);
+      } finally { await loadingTask.destroy(); }
+    }
+
+    function addFileRow(file) {
+      const element = document.createElement("div");
+      element.className = "file-row";
+      const details = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "file-name";
+      name.textContent = file.name;
+      const meta = document.createElement("div");
+      meta.className = "file-meta";
+      meta.textContent = formatBytes(file.size);
+      const status = document.createElement("div");
+      status.className = "file-status";
+      status.textContent = "Waiting";
+      details.append(name, meta);
+      element.append(details, status);
+      fileList.appendChild(element);
+      return status;
+    }
+
+    function renderTable() {
+      const term = searchInput.value.trim().toLowerCase();
+      const visibleRows = term
+        ? state.rows.filter(row => COLUMNS.some(column => String(row[column]).toLowerCase().includes(term)))
+        : state.rows;
+      tableBody.replaceChildren();
+
+      const fragment = document.createDocumentFragment();
+      visibleRows.forEach(row => {
+        const tr = document.createElement("tr");
+        COLUMNS.forEach(column => {
+          const td = document.createElement("td");
+          td.textContent = row[column];
+          td.title = row[column];
+          if (column === "Status / Notes") td.className = "notes";
+          tr.appendChild(td);
+        });
+        fragment.appendChild(tr);
+      });
+      tableBody.appendChild(fragment);
+
+      const hasRows = state.rows.length > 0;
+      resultsTable.hidden = !hasRows;
+      emptyState.hidden = hasRows;
+      downloadButton.disabled = !hasRows || state.busy;
+      searchInput.disabled = !hasRows;
+      clearButton.disabled = state.busy || (!hasRows && !fileList.children.length);
+      summaryText.textContent = state.filesProcessed
+        ? `${state.rows.length.toLocaleString()} line item${state.rows.length === 1 ? "" : "s"} from ${state.filesProcessed} PDF${state.filesProcessed === 1 ? "" : "s"}${term ? ` · ${visibleRows.length} shown` : ""}`
+        : "No PDFs processed yet";
+    }
+
+    async function processFiles(fileCollection) {
+      if (state.busy) return;
+      const files = [...fileCollection];
+      const pdfFiles = files.filter(file => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+      notice.classList.remove("visible");
+      if (!pdfFiles.length) {
+        notice.textContent = "Please choose one or more PDF files.";
+        notice.classList.add("visible");
+        return;
+      }
+      if (pdfFiles.length !== files.length) {
+        notice.textContent = `${files.length - pdfFiles.length} non-PDF file${files.length - pdfFiles.length === 1 ? " was" : "s were"} skipped.`;
+        notice.classList.add("visible");
+      }
+
+      state.busy = true;
+      fileInput.disabled = true;
+      const entries = pdfFiles.map(file => ({ file, status: addFileRow(file) }));
+      renderTable();
+
+      for (const entry of entries) {
+        entry.status.textContent = "Reading…";
+        try {
+          const rows = await extractRows(entry.file);
+          state.rows.push(...rows);
+          state.filesProcessed += 1;
+          entry.status.textContent = `${rows.length} row${rows.length === 1 ? "" : "s"}`;
+        } catch (error) {
+          console.error(error);
+          entry.status.textContent = error.message || "Could not read PDF";
+          entry.status.classList.add("error");
+        }
+        renderTable();
+      }
+
+      state.busy = false;
+      fileInput.disabled = false;
+      fileInput.value = "";
+      renderTable();
+    }
+
+    function downloadExcel() {
+      if (!state.rows.length) return;
+      if (!window.XLSX) {
+        notice.textContent = "The Excel exporter could not load. Check your internet connection and refresh this page.";
+        notice.classList.add("visible");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(state.rows, { header: COLUMNS });
+      worksheet["!cols"] = COLUMNS.map(column => ({wch: column.includes("Description") || column.includes("Site") || column.includes("File") ? 38 : 20}));
+      worksheet["!autofilter"] = { ref: worksheet["!ref"] };
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Line Items");
+      XLSX.writeFile(workbook, "viva_extract.xlsx", { compression: true });
+    }
+
+    function clearAll() {
+      state.rows = [];
+      state.filesProcessed = 0;
+      fileList.replaceChildren();
+      searchInput.value = "";
+      notice.classList.remove("visible");
+      renderTable();
+    }
+
+    fileInput.addEventListener("change", event => processFiles(event.target.files));
+    searchInput.addEventListener("input", renderTable);
+    downloadButton.addEventListener("click", downloadExcel);
+    clearButton.addEventListener("click", clearAll);
+    dropZone.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+    ["dragenter", "dragover"].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.add("dragging");
+    }));
+    ["dragleave", "drop"].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.remove("dragging");
+    }));
+    dropZone.addEventListener("drop", event => processFiles(event.dataTransfer.files));
+  </script>
+</body>
+</html>
